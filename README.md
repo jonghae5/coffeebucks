@@ -1,6 +1,6 @@
 <br/>
 <p align="middle">
-  <img width="200px;" src="./src/images/jongbucks.png"/>
+  <img width="300" src="./src/images/jongbucks.png"/>
 </p>
 <h2 align="middle">JS 종벅스 카페메뉴 앱</h2>
 <p align="middle">Vanilla JS로 구현 하는 상태관리가 가능한 카페메뉴 앱</p>
