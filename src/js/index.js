@@ -1,28 +1,33 @@
-// TODO localStorage Read & Write
-// - [X] localStorage 에 데이터를 저장한다. 
-// - [X] 메뉴를 추가할 때 
-// - [X] 메뉴를 수정할 때 
-// - [X] 메뉴를 삭제할 때 
-// - [X] localStorage 에 데이터를 읽어온다.
+// 1. 웹서버 연동
+// 2. BASE_URL 선언
+// 3. 비동기 처리 부분 확인, 웹서버 요청 코딩
+// 4. 서버 데이터 요청 후, 렌더링
+// 5. 리팩토링 
+// - API 파일 분리
+// - 페이지 렌더링 관련 중복 제거
+// - 서버 요청시 option 객체
+// -카테고리 버튼 클릭시 콜백 함수 분리
+// 6. 사용자 경험 부분
 
-// TODO 카테고리별 메뉴판 관리
-// - [X] 에스프레소
-// - [X] 프라푸치노
-// - [X] 블렌디드
-// - [X] 티바나
-// - [X] 디저트
+// TODO 서버 요청 
+// - [X] 웹 서버를 띄운다.
+// - [X] 서버에 새로운 메뉴명이 추가될 수 있도록 요청한다.
+// - [X] 서버에 카테고리별 메뉴 리스트를 불러온다.
+// - [X] 서버에 메뉴가 수정될 수 있도록 요청한다.
+// - [X] 서버에 메뉴 품절상태를 토글할 수 있도록 요청한다.
+// - [X] 서버에 메뉴가 삭제될 수 있도록 요청한다.
 
-// TODO 페이지 접근시 최초 데이터 Read & Rendering
-// - [X] 페이지에 최초 로딩시 LocalStorage에 에스프레소 데이터를 읽어온다.
-// - [X] 메뉴를 페이지에 나타낸다.
+// TODO 리팩토링
+// - [X] localStorage에 저장하는 로직은 지운다.
+// - [X] fetch 비동기 api를 사용하는 부분을 async await을 사용하여 구현한다.
 
-// TODO 품절 상태 관리
-// - [X] 품절 버튼 추가
-// - [X] 품절 버튼 클릭시 LocalStorage에 상태값이 저장
-// - [X] 품절 해당 메뉴의 상태값이 페이지에 그려진다. (`sold out` class)
+// TODO 사용자 경험
+// - [X] API 통신이 실패하는 경우에 대해 사용자가 알 수 있게 예외처리를 진행한다.
+// - [X] 중복되는 메뉴는 추가할 수 없다.
 
 import {$} from "./utils/dom.js"
-import storage from "./storage/index.js"
+// import storage from "./storage/index.js"
+import MenuApi from "./api/index.js";
 
 function App() {
     // 상태(변하는 데이터) - 메뉴명, 현재 카테고리(espresso)
@@ -34,21 +39,21 @@ function App() {
         teavana : [],
         desert : []
     };
-    this.init = () => {
-        if(storage.getLocalStorage()) {
-            this.menu = storage.getLocalStorage();
-            // console.log(this.menu);
-        }
+
+    this.init = async () => {
+        this.menu[this.currentCategory] = await MenuApi.getAllMenuByCategory(
+            this.currentCategory);
         render();
         initEventListeners();
     };
     
-    const render = () => {
+    const render = async () => {
+        this.menu[this.currentCategory] = await MenuApi.getAllMenuByCategory(this.currentCategory);
         const template = this.menu[this.currentCategory]
-        .map((menuItem, index) => {
+        .map((menuItem) => {
             return `  
-            <li data-menu-id="${index}" class="menu-list-item d-flex items-center py-2">
-            <span class="w-100 pl-2 menu-name ${menuItem.soldOut?"sold-out":""}">${menuItem.name}</span>
+            <li data-menu-id="${menuItem.id}" class="menu-list-item d-flex items-center py-2">
+            <span class="w-100 pl-2 menu-name ${menuItem.isSoldOut?"sold-out":""}">${menuItem.name}</span>
             <button
                 type="button"
                 class="bg-gray-50 text-gray-500 text-sm mr-1 menu-sold-out-button"
@@ -77,54 +82,64 @@ function App() {
     };
 
     const updateMenuCount = () => {
-        // const menuCount = $('#menu-list')
-        // .querySelectorAll("li")
-        // .length;
         const menuCount = this.menu[this.currentCategory].length;
         $(".menu-count").innerText = `총 ${menuCount}개`;  
     };
 
-    const addMenuName = () => {
+    const addMenuName = async () => {
         if($('#menu-name').value === "") {
             alert("값을 입력해주세요.");
             return;
         }  
+        const duplicatedItem = this.menu[this.currentCategory].find(menuItem => menuItem.name === $('#menu-name').value)
+        if(duplicatedItem) {
+            alert("이미 등록된 메뉴입니다. 다시 입력해주세요.");
+            $('#menu-name').value = ""; 
+            return;
+        }
+
         const menuName = $('#menu-name').value;
-        this.menu[this.currentCategory].push({name : menuName});
-        storage.setLocalStorage(this.menu);
+        await MenuApi.createMenu( this.currentCategory,menuName);
         render();
-        $('#menu-name').value = "";
-        
+        $('#menu-name').value = "";   
     };
 
-    const updateMenuName = (e) => {
+    const updateMenuName = async (e) => {
         const menuId = e.target.closest("li").dataset.menuId;
         const $menuName = e.target.closest("li").querySelector(".menu-name");
         const updateMenuName = prompt(
             "메뉴명을 수정하세요",
         $menuName.innerText);
-        this.menu[this.currentCategory][menuId].name = updateMenuName;
-        storage.setLocalStorage(this.menu);
-        // $menuName.innerText = updateMenuName;
+        await MenuApi.updateMenu(this.currentCategory, updateMenuName, menuId);
         render();
     };
 
-    const removeMenuName = (e) => {
+    const removeMenuName = async (e) => {
         const deleteMenuName = confirm("정말 삭제하시겠습니까?");
+        
         if(deleteMenuName){
             const menuId = e.target.closest("li").dataset.menuId;
-            this.menu[this.currentCategory].splice(menuId, 1);
-            storage.setLocalStorage(this.menu);
+            await MenuApi.deleteMenu(this.currentCategory, menuId);
             render();
         }
     };
 
-    const soldOutMenu = (e) => {
+    const soldOutMenu = async (e) => {
         const menuId = e.target.closest("li").dataset.menuId;    
-        this.menu[this.currentCategory][menuId].soldOut = 
-        !this.menu[this.currentCategory][menuId].soldOut;
-        storage.setLocalStorage(this.menu);
+        await MenuApi.toggleSoldOutMenu(this.currentCategory, menuId);
+        this.menu[this.currentCategory] = await MenuApi.getAllMenuByCategory(this.currentCategory);
         render();
+    };
+
+    const changeCategory = (e) => {
+        const isCategoryBtn = e.target.classList.contains("cafe-category-name");
+        if (isCategoryBtn) {
+            const categoryName = e.target.dataset.categoryName;
+            // console.log(categoryName);
+            this.currentCategory = categoryName;
+            $("#category-title").innerText = `${e.target.innerText} 메뉴 관리`;
+            render();
+        }
     };
 
     const initEventListeners = () => {
@@ -158,15 +173,8 @@ function App() {
             };
         });
     
-        $("nav").addEventListener("click",(e) => {
-            const isCategoryBtn = e.target.classList.contains("cafe-category-name");
-            if (isCategoryBtn) {
-                const categoryName = e.target.dataset.categoryName;
-                // console.log(categoryName);
-                this.currentCategory = categoryName;
-                $("#category-title").innerText = `${e.target.innerText} 메뉴 관리`;
-                render();
-            }
+        $("nav").addEventListener("click", (e) => {
+            changeCategory(e);
         });
     };
 }
